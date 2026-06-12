@@ -8,7 +8,7 @@
       content="공식 월드컵 중계를 친구들과 함께 보는 동기화 워치파티"
     />
     <title>같이보기 | 월드컵 워치파티</title>
-    <link rel="stylesheet" href="/styles.css?v=d7e15ae" />
+    <link rel="stylesheet" href="/styles.css?v=fullscreen-1" />
   </head>
   <body>
     <header class="site-header">
@@ -120,7 +120,9 @@
               <div class="local-controls">
                 <button id="captureButton" type="button">내 화면 띄우기</button>
                 <button id="readyButton" type="button">시청 준비 완료</button>
-                <button id="fullscreenButton" type="button">전체 화면</button>
+                <button id="fullscreenButton" type="button">
+                  영상 영역 전체 화면
+                </button>
               </div>
             </div>
 
@@ -204,6 +206,6 @@
     <div id="toast" class="toast" role="status"></div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script type="module" src="/app.js?v=d7e15ae"></script>
+    <script type="module" src="/app.js?v=fullscreen-1"></script>
   </body>
 </html>

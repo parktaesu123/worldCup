@@ -149,12 +149,36 @@ for (const tabButton of elements.sideTabs) {
 }
 
 elements.fullscreenButton.addEventListener("click", async () => {
-  if (document.fullscreenElement) {
-    await document.exitFullscreen();
-  } else {
-    await elements.playerShell.requestFullscreen();
+  try {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      } else {
+        document.webkitExitFullscreen();
+      }
+    } else if (elements.playerShell.requestFullscreen) {
+      await elements.playerShell.requestFullscreen();
+    } else if (elements.playerShell.webkitRequestFullscreen) {
+      elements.playerShell.webkitRequestFullscreen();
+    } else {
+      throw new Error("Fullscreen API is unavailable.");
+    }
+  } catch {
+    showToast("이 브라우저에서는 영상 영역 전체 화면을 사용할 수 없습니다.");
   }
 });
+
+function updateFullscreenButton() {
+  const fullscreenElement =
+    document.fullscreenElement ?? document.webkitFullscreenElement;
+  const playerIsFullscreen = fullscreenElement === elements.playerShell;
+  elements.fullscreenButton.textContent = playerIsFullscreen
+    ? "전체 화면 종료"
+    : "영상 영역 전체 화면";
+}
+
+document.addEventListener("fullscreenchange", updateFullscreenButton);
+document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
 
 socket.on("connect", () => {
   setSyncStatus("서버 연결됨", true);

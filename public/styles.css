@@ -280,6 +280,33 @@ dialog label {
   object-fit: contain;
 }
 
+.player-shell:fullscreen,
+.player-shell:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  min-height: 0;
+  max-width: none;
+  aspect-ratio: auto;
+  border-radius: 0;
+  background: #000;
+}
+
+.player-shell:fullscreen video,
+.player-shell:fullscreen iframe,
+.player-shell:-webkit-full-screen video,
+.player-shell:-webkit-full-screen iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.player-shell:fullscreen .embed-popout,
+.player-shell:-webkit-full-screen .embed-popout {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .embed-popout {
   position: absolute;
   top: 14px;
