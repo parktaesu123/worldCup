@@ -1,0 +1,27 @@
+services:
+  worldcup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: worldcup-watch-party:latest
+    container_name: worldcup-watch-party
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    ports:
+      - "127.0.0.1:${APP_PORT:-8789}:3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s

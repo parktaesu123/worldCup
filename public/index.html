@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="공식 월드컵 중계를 친구들과 함께 보는 동기화 워치파티"
+    />
+    <title>같이보기 | 월드컵 워치파티</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="같이보기 홈">
+        <span class="brand-icon" aria-hidden="true">▶</span>
+        <span class="brand-mark">같이보기</span>
+      </a>
+      <div class="header-copy">실시간 워치파티</div>
+    </header>
+
+    <main>
+      <section id="homeView" class="home-view">
+        <div class="hero-copy">
+          <div class="hero-icon">▶</div>
+          <h1>같이보기</h1>
+          <p class="hero-description">
+            공식 중계를 보면서 친구들과 실시간으로 이야기하세요.
+          </p>
+        </div>
+
+        <div class="entry-card">
+          <h2>워치파티 시작하기</h2>
+          <p>새 방을 만들거나 공유받은 방 코드로 입장하세요.</p>
+          <button id="createRoomButton" class="primary-button" type="button">
+            새 방 만들기
+          </button>
+          <div class="divider"><span>또는</span></div>
+          <form id="joinCodeForm" class="join-code-form">
+            <label for="roomCode">방 코드</label>
+            <div class="inline-field">
+              <input
+                id="roomCode"
+                name="roomCode"
+                minlength="4"
+                maxlength="32"
+                pattern="[a-zA-Z0-9-]+"
+                placeholder="예: a1b2c3d4"
+                required
+              />
+              <button type="submit" aria-label="방 입장">→</button>
+            </div>
+          </form>
+          <p class="source-note">
+            방장이 공유한 화면은 참여자에게 WebRTC로 직접 전송됩니다.
+          </p>
+        </div>
+      </section>
+
+      <section id="roomView" class="room-view hidden">
+        <div class="room-grid">
+          <section class="stage-panel">
+            <div id="playerShell" class="player-shell">
+              <video
+                id="videoPlayer"
+                class="hidden"
+                playsinline
+                muted
+                preload="auto"
+              ></video>
+              <iframe
+                id="embedPlayer"
+                class="hidden"
+                title="공식 중계 플레이어"
+                allow="autoplay; fullscreen; picture-in-picture"
+                allowfullscreen
+                referrerpolicy="strict-origin-when-cross-origin"
+              ></iframe>
+              <div id="emptyPlayer" class="empty-player hidden">
+                <div class="empty-icon">▶</div>
+                <h2>방장이 화면을 공유할 수 있습니다</h2>
+                <p>
+                  공유 권한이 있는 영상이나 화면을 선택하면 이 플레이어에서
+                  함께 볼 수 있습니다.
+                </p>
+                <a
+                  id="officialWatchLink"
+                  class="watch-button hidden"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  공식 중계 보러 가기
+                </a>
+              </div>
+              <div id="playerLoading" class="player-loading hidden">
+                <span class="loader"></span>
+                중계 연결 중
+              </div>
+            </div>
+
+            <div class="player-toolbar">
+              <div id="syncStatus" class="sync-status">
+                <span></span> 방에 연결하는 중
+              </div>
+              <div class="local-controls">
+                <button id="broadcastButton" class="hidden" type="button">
+                  화면 공유
+                </button>
+                <button id="muteButton" type="button">소리 켜기</button>
+                <button id="fullscreenButton" type="button">전체 화면</button>
+              </div>
+            </div>
+
+            <div class="video-details">
+              <h1 id="streamLabel">공식 월드컵 중계</h1>
+              <div class="video-actions">
+                <div class="viewer-count">
+                  <span id="viewerCount">0</span>명 시청 중
+                </div>
+                <button id="copyLinkButton" class="ghost-button" type="button">
+                  공유
+                </button>
+              </div>
+            </div>
+
+            <div class="room-meta">
+              <div>
+                <span>방 코드</span>
+                <strong id="roomIdLabel">--------</strong>
+              </div>
+              <div>
+                <span>방장</span>
+                <strong id="hostLabel">방장 연결 중</strong>
+              </div>
+              <div>
+                <span>재생 방식</span>
+                <strong id="streamModeLabel">확인 중</strong>
+              </div>
+            </div>
+          </section>
+
+          <aside class="side-panel">
+            <div class="side-tabs">
+              <button class="active" data-tab="chat" type="button">
+                실시간 채팅
+              </button>
+              <button data-tab="people" type="button">
+                참여자 <span id="peopleCount">0</span>
+              </button>
+            </div>
+
+            <div id="chatTab" class="tab-content chat-tab">
+              <ol id="messageList" class="message-list"></ol>
+              <form id="chatForm" class="chat-form">
+                <input
+                  id="chatInput"
+                  maxlength="200"
+                  autocomplete="off"
+                  placeholder="메시지 보내기"
+                  aria-label="응원 메시지"
+                />
+                <button type="submit" aria-label="메시지 전송">전송</button>
+              </form>
+            </div>
+
+            <div id="peopleTab" class="tab-content people-tab hidden">
+              <ul id="peopleList"></ul>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="nicknameDialog">
+      <form id="nicknameForm" method="dialog">
+        <h2>방에 입장하기</h2>
+        <p class="dialog-description">채팅에서 사용할 닉네임을 입력하세요.</p>
+        <label for="nicknameInput">닉네임</label>
+        <input
+          id="nicknameInput"
+          maxlength="20"
+          autocomplete="nickname"
+          placeholder="닉네임"
+          required
+        />
+        <p id="joinError" class="form-error"></p>
+        <button class="primary-button" type="submit">입장</button>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/vendor/hls.min.js"></script>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

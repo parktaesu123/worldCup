@@ -1,0 +1,24 @@
+{
+  "name": "worldcup-watch-party",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A synchronized watch party for licensed World Cup streams.",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "hls.js": "^1.6.5",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
+  }
+}
