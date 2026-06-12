@@ -280,6 +280,25 @@ dialog label {
   object-fit: contain;
 }
 
+.embed-popout {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 3;
+  padding: 9px 13px;
+  border-radius: 18px;
+  color: var(--text);
+  background: rgba(15, 15, 15, 0.82);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  backdrop-filter: blur(8px);
+}
+
+.embed-popout:hover {
+  background: rgba(48, 48, 48, 0.92);
+}
+
 .empty-player {
   width: min(480px, calc(100% - 40px));
   text-align: center;

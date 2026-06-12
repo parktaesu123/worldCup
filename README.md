@@ -41,8 +41,8 @@ OFFICIAL_WATCH_URL=https://chzzk.naver.com/home/sports/fifa-worldcup-2026
 OFFICIAL_WATCH_LABEL=치지직에서 보기
 STREAM_LABEL=2026 FIFA 월드컵
 
-# 공식 제공자가 iframe 삽입을 허용할 때만 사용하세요.
-# OFFICIAL_EMBED_URL=https://example.com/official/embed
+# 공식 페이지를 방 안의 플레이어 영역에 엽니다.
+OFFICIAL_EMBED_URL=https://chzzk.naver.com/home/sports/fifa-worldcup-2026
 ```
 
 - `OFFICIAL_WATCH_URL`: 참가자가 공식 중계를 새 창으로 열 주소입니다.
@@ -50,6 +50,10 @@ STREAM_LABEL=2026 FIFA 월드컵
 - `STREAM_LABEL`: 방 상단에 표시할 경기/중계 이름입니다.
 - `OFFICIAL_EMBED_URL`: 선택 사항입니다. 공식 제공자가 iframe을 허용할 때만
   앱 안에 표시됩니다.
+
+현재 치지직 월드컵 페이지는 iframe 차단 헤더를 보내지 않아 앱 안에서 열도록
+설정할 수 있습니다. 치지직이 정책을 변경하거나 로그인·DRM 재생을 제한하면
+플레이어 우측 상단의 `새 창으로 열기`를 사용해야 합니다.
 
 ## 왜 이렇게 만들었나요?
 

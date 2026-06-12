@@ -19,6 +19,7 @@ const elements = {
   streamModeLabel: document.querySelector("#streamModeLabel"),
   localCapturePlayer: document.querySelector("#localCapturePlayer"),
   embedPlayer: document.querySelector("#embedPlayer"),
+  embedPopoutLink: document.querySelector("#embedPopoutLink"),
   emptyPlayer: document.querySelector("#emptyPlayer"),
   officialWatchLink: document.querySelector("#officialWatchLink"),
   popoutWatchButton: document.querySelector("#popoutWatchButton"),
@@ -215,6 +216,7 @@ async function loadWatchConfig() {
 function setupOfficialWatch(watchConfig) {
   elements.officialWatchLink.href = watchConfig.officialWatchUrl;
   elements.officialWatchLink.textContent = watchConfig.officialWatchLabel;
+  elements.embedPopoutLink.href = watchConfig.officialWatchUrl;
   elements.officialWatchLink.classList.remove("hidden");
   elements.popoutWatchButton.classList.remove("hidden");
   elements.emptyPlayer.classList.remove("hidden");
@@ -223,6 +225,7 @@ function setupOfficialWatch(watchConfig) {
     elements.playerLoading.classList.remove("hidden");
     elements.embedPlayer.src = watchConfig.embedUrl;
     elements.embedPlayer.classList.remove("hidden");
+    elements.embedPopoutLink.classList.remove("hidden");
     elements.emptyPlayer.classList.add("hidden");
     elements.embedPlayer.addEventListener(
       "load",
@@ -267,6 +270,7 @@ async function startLocalCapture() {
     }
 
     elements.embedPlayer.classList.add("hidden");
+    elements.embedPopoutLink.classList.add("hidden");
     elements.emptyPlayer.classList.add("hidden");
     elements.playerLoading.classList.add("hidden");
     elements.localCapturePlayer.srcObject = stream;
@@ -295,6 +299,7 @@ function stopLocalCapture() {
 
   if (config?.embedUrl) {
     elements.embedPlayer.classList.remove("hidden");
+    elements.embedPopoutLink.classList.remove("hidden");
   } else {
     elements.emptyPlayer.classList.remove("hidden");
   }

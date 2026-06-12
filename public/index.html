@@ -73,10 +73,18 @@
                 id="embedPlayer"
                 class="hidden"
                 title="공식 중계 플레이어"
-                allow="autoplay; fullscreen; picture-in-picture"
+                allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
                 allowfullscreen
                 referrerpolicy="strict-origin-when-cross-origin"
               ></iframe>
+              <a
+                id="embedPopoutLink"
+                class="embed-popout hidden"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                새 창으로 열기
+              </a>
               <div id="emptyPlayer" class="empty-player hidden">
                 <div class="empty-icon">▶</div>
                 <h2>내 치지직 화면을 이 방에 띄워 보세요</h2>
