@@ -276,6 +276,10 @@ dialog label {
   background: #000;
 }
 
+.player-shell video {
+  object-fit: contain;
+}
+
 .empty-player {
   width: min(480px, calc(100% - 40px));
   text-align: center;
@@ -308,20 +312,38 @@ dialog label {
 .watch-button {
   display: inline-flex;
   min-height: 40px;
-  margin-top: 22px;
   padding: 0 18px;
   align-items: center;
   justify-content: center;
+  border: 0;
   border-radius: 20px;
   color: #0f0f0f;
   background: var(--white);
   font-size: 13px;
   font-weight: 700;
   text-decoration: none;
+  cursor: pointer;
+}
+
+.watch-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+.watch-button.secondary {
+  color: var(--text);
+  background: var(--surface);
 }
 
 .watch-button:hover {
   background: #d9d9d9;
+}
+
+.watch-button.secondary:hover {
+  background: var(--surface-hover);
 }
 
 .player-loading {
@@ -400,7 +422,8 @@ dialog label {
   background: var(--surface-hover);
 }
 
-.local-controls button.broadcasting {
+.local-controls button.ready,
+.local-controls button.capturing {
   color: #0f0f0f;
   background: var(--white);
 }
@@ -634,13 +657,28 @@ dialog label {
   font-weight: 700;
 }
 
+.ready-badge,
 .host-badge {
-  margin-left: auto;
   padding: 4px 7px;
   border-radius: 10px;
+  font-size: 9px;
+}
+
+.ready-badge {
+  margin-left: auto;
+  color: #0f0f0f;
+  background: #9be15d;
+  font-weight: 700;
+}
+
+.host-badge {
+  margin-left: auto;
   color: var(--muted);
   background: var(--surface);
-  font-size: 9px;
+}
+
+.ready-badge + .host-badge {
+  margin-left: 0;
 }
 
 dialog {

@@ -17,15 +17,16 @@ const elements = {
   roomIdLabel: document.querySelector("#roomIdLabel"),
   hostLabel: document.querySelector("#hostLabel"),
   streamModeLabel: document.querySelector("#streamModeLabel"),
-  videoPlayer: document.querySelector("#videoPlayer"),
+  localCapturePlayer: document.querySelector("#localCapturePlayer"),
   embedPlayer: document.querySelector("#embedPlayer"),
   emptyPlayer: document.querySelector("#emptyPlayer"),
   officialWatchLink: document.querySelector("#officialWatchLink"),
+  popoutWatchButton: document.querySelector("#popoutWatchButton"),
   playerLoading: document.querySelector("#playerLoading"),
   playerShell: document.querySelector("#playerShell"),
   syncStatus: document.querySelector("#syncStatus"),
-  broadcastButton: document.querySelector("#broadcastButton"),
-  muteButton: document.querySelector("#muteButton"),
+  captureButton: document.querySelector("#captureButton"),
+  readyButton: document.querySelector("#readyButton"),
   fullscreenButton: document.querySelector("#fullscreenButton"),
   messageList: document.querySelector("#messageList"),
   chatForm: document.querySelector("#chatForm"),
@@ -39,24 +40,12 @@ const elements = {
 
 const roomId = getRoomId();
 let ownSocketId = null;
-let isHost = false;
-let applyingRemoteState = false;
+let isReady = false;
 let config = null;
-let hls = null;
+let localCaptureStream = null;
+let lastReadyCount = 0;
+let lastReadyTotal = 0;
 let toastTimer = null;
-let roomBroadcasting = false;
-let localBroadcastStream = null;
-let remoteBroadcastStream = null;
-let remotePeerConnection = null;
-let viewerRequested = false;
-const hostPeerConnections = new Map();
-const pendingIceCandidates = new Map();
-let rtcConfiguration = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-  ],
-};
 
 if (roomId) {
   elements.homeView.classList.add("hidden");
@@ -64,7 +53,7 @@ if (roomId) {
   elements.roomIdLabel.textContent = roomId;
   elements.nicknameInput.value = localStorage.getItem("watch-party-nickname") ?? "";
   elements.nicknameDialog.showModal();
-  loadPlayer();
+  loadWatchConfig();
 }
 
 elements.createRoomButton.addEventListener("click", async () => {
@@ -111,12 +100,31 @@ elements.copyLinkButton.addEventListener("click", async () => {
   showToast("초대 링크를 복사했습니다.");
 });
 
-elements.broadcastButton.addEventListener("click", async () => {
-  if (localBroadcastStream) {
-    stopBroadcast();
+elements.captureButton.addEventListener("click", async () => {
+  if (localCaptureStream) {
+    stopLocalCapture();
   } else {
-    await startBroadcast();
+    await startLocalCapture();
   }
+});
+
+elements.readyButton.addEventListener("click", () => {
+  isReady = !isReady;
+  socket.emit("watch-ready-state", { ready: isReady }, (result) => {
+    if (!result?.ok) {
+      isReady = !isReady;
+      showToast("준비 상태를 바꾸지 못했습니다.");
+    }
+  });
+  updateReadyButton();
+});
+
+elements.popoutWatchButton.addEventListener("click", () => {
+  openOfficialWatchPage();
+});
+
+elements.officialWatchLink.addEventListener("click", () => {
+  setSyncStatus("공식 중계 창을 열었습니다. 여기서는 채팅을 계속하세요.", true);
 });
 
 elements.chatForm.addEventListener("submit", (event) => {
@@ -139,34 +147,6 @@ for (const tabButton of elements.sideTabs) {
   });
 }
 
-elements.muteButton.addEventListener("click", () => {
-  if (elements.videoPlayer.srcObject) {
-    if (isHost && localBroadcastStream) {
-      showToast("내 공유 미리보기는 에코 방지를 위해 음소거됩니다.");
-      return;
-    }
-
-    elements.videoPlayer.muted = !elements.videoPlayer.muted;
-    elements.muteButton.textContent = elements.videoPlayer.muted
-      ? "소리 켜기"
-      : "음소거";
-    elements.videoPlayer.play().catch(() => {
-      showToast("재생 버튼을 한 번 더 눌러 주세요.");
-    });
-    return;
-  }
-
-  if (!config || config.type === "embed" || !config.configured) {
-    showToast("임베드 플레이어 안에서 소리를 조절해 주세요.");
-    return;
-  }
-
-  elements.videoPlayer.muted = !elements.videoPlayer.muted;
-  elements.muteButton.textContent = elements.videoPlayer.muted
-    ? "소리 켜기"
-    : "음소거";
-});
-
 elements.fullscreenButton.addEventListener("click", async () => {
   if (document.fullscreenElement) {
     await document.exitFullscreen();
@@ -184,165 +164,47 @@ socket.on("disconnect", () => {
 });
 
 socket.on("room-state", (state) => {
-  const wasHost = isHost;
-  isHost = state.hostId === ownSocketId;
-  roomBroadcasting = state.broadcasting;
   elements.viewerCount.textContent = state.users.length;
   elements.peopleCount.textContent = state.users.length;
   renderPeople(state.users);
-  elements.broadcastButton.classList.toggle("hidden", !isHost);
 
   const host = state.users.find((user) => user.isHost);
-  elements.hostLabel.textContent = isHost
-    ? "내가 방장"
-    : `${host?.nickname ?? "알 수 없음"}님`;
+  const readyCount = state.users.filter((user) => user.ready).length;
+  const readyTotal = state.users.length;
+  lastReadyCount = readyCount;
+  lastReadyTotal = readyTotal;
+  elements.hostLabel.textContent =
+    state.hostId === ownSocketId
+      ? "내가 방장"
+      : `${host?.nickname ?? "알 수 없음"}님`;
+  updateStreamMode();
 
-  if (wasHost && !isHost && localBroadcastStream) {
-    stopBroadcast(false);
+  const me = state.users.find((user) => user.id === ownSocketId);
+  if (me) {
+    isReady = Boolean(me.ready);
+    updateReadyButton();
   }
-
-  if (roomBroadcasting) {
-    elements.streamModeLabel.textContent = "화면 공유";
-    if (isHost && localBroadcastStream) {
-      setSyncStatus("내 화면 송출 중", true);
-    } else if (!isHost && !remoteBroadcastStream && !viewerRequested) {
-      requestBroadcast();
-    }
-    return;
-  }
-
-  if (remotePeerConnection || remoteBroadcastStream) {
-    stopRemoteBroadcast();
-  }
-
-  if (config?.syncAvailable) {
-    elements.videoPlayer.controls = isHost;
-    setSyncStatus(isHost ? "내 재생 화면을 공유 중" : "방장 화면과 동기화됨", true);
-    if (!wasHost || !isHost) applyMediaState(state.media);
-  } else if (config?.officialWatchUrl) {
-    setSyncStatus("채팅 연결됨", true);
-  }
-});
-
-socket.on("media-state", (mediaState) => {
-  if (!isHost) applyMediaState(mediaState);
-});
-
-socket.on("broadcast-started", () => {
-  roomBroadcasting = true;
-  requestBroadcast();
-});
-
-socket.on("broadcast-stopped", () => {
-  roomBroadcasting = false;
-  stopRemoteBroadcast();
-});
-
-socket.on("viewer-ready", async ({ viewerId }) => {
-  if (!isHost || !localBroadcastStream) return;
-  await createOfferForViewer(viewerId);
-});
-
-socket.on("viewer-left", ({ viewerId }) => {
-  closeHostPeer(viewerId);
-});
-
-socket.on("webrtc-offer", async ({ senderId, description }) => {
-  if (isHost || !roomBroadcasting) return;
-  await acceptBroadcastOffer(senderId, description);
-});
-
-socket.on("webrtc-answer", async ({ senderId, description }) => {
-  const peer = hostPeerConnections.get(senderId);
-  if (!peer || !description) return;
-
-  await peer.setRemoteDescription(description);
-  await flushPendingIce(senderId, peer);
-});
-
-socket.on("webrtc-ice-candidate", async ({ senderId, candidate }) => {
-  if (!candidate) return;
-
-  const peer = isHost
-    ? hostPeerConnections.get(senderId)
-    : remotePeerConnection;
-  if (!peer || !peer.remoteDescription) {
-    const queue = pendingIceCandidates.get(senderId) ?? [];
-    queue.push(candidate);
-    pendingIceCandidates.set(senderId, queue);
-    return;
-  }
-
-  await peer.addIceCandidate(candidate).catch(() => {});
 });
 
 socket.on("chat-message", (message) => appendMessage(message, false));
 socket.on("system-message", (message) => appendMessage(message, true));
 
-window.addEventListener("beforeunload", () => {
-  if (localBroadcastStream) stopBroadcast(false);
-});
-
-async function loadPlayer() {
+async function loadWatchConfig() {
   try {
     const response = await fetch("/api/config");
     config = await response.json();
-    if (Array.isArray(config.rtcIceServers)) {
-      rtcConfiguration = { iceServers: config.rtcIceServers };
-    }
     elements.streamLabel.textContent = config.label;
+    updateStreamMode();
+
     if (config.officialWatchUrl) {
-      elements.officialWatchLink.href = config.officialWatchUrl;
-      elements.officialWatchLink.textContent = config.officialWatchLabel;
-      elements.officialWatchLink.classList.remove("hidden");
-    }
-
-    if (!config.configured) {
-      elements.emptyPlayer.classList.remove("hidden");
-      elements.streamModeLabel.textContent = config.officialWatchUrl
-        ? "공식 사이트"
-        : "설정 필요";
-      setSyncStatus(
-        config.officialWatchUrl ? "채팅 연결됨" : "중계 소스 미설정",
-        Boolean(config.officialWatchUrl),
-      );
+      setupOfficialWatch(config);
       return;
     }
 
-    if (config.type === "embed") {
-      elements.embedPlayer.src = config.url;
-      elements.embedPlayer.classList.remove("hidden");
-      elements.streamModeLabel.textContent = "공식 임베드";
-      elements.muteButton.textContent = "플레이어에서 조절";
-      setSyncStatus("채팅만 동기화됨", true);
-      return;
-    }
-
-    elements.videoPlayer.classList.remove("hidden");
-    elements.playerLoading.classList.remove("hidden");
-    elements.streamModeLabel.textContent =
-      config.type === "hls" ? "적응형 HLS" : "직접 영상";
-    attachVideoEvents();
-
-    if (config.type === "hls" && Hls.isSupported()) {
-      hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-        backBufferLength: 90,
-        maxBufferLength: 30,
-      });
-      hls.loadSource(config.url);
-      hls.attachMedia(elements.videoPlayer);
-      hls.on(Hls.Events.MANIFEST_PARSED, hidePlayerLoading);
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (data.fatal) handleFatalHlsError(data);
-      });
-    } else {
-      elements.videoPlayer.src = config.url;
-      elements.videoPlayer.addEventListener("loadedmetadata", hidePlayerLoading, {
-        once: true,
-      });
-    }
+    elements.emptyPlayer.classList.remove("hidden");
+    elements.officialWatchLink.classList.add("hidden");
+    elements.popoutWatchButton.classList.add("hidden");
+    setSyncStatus("공식 시청 링크가 아직 설정되지 않았습니다.", false);
   } catch {
     elements.emptyPlayer.classList.remove("hidden");
     elements.streamModeLabel.textContent = "연결 실패";
@@ -350,30 +212,38 @@ async function loadPlayer() {
   }
 }
 
-function attachVideoEvents() {
-  const broadcast = () => {
-    if (!isHost || applyingRemoteState) return;
-    socket.emit("media-state", {
-      paused: elements.videoPlayer.paused,
-      currentTime: elements.videoPlayer.currentTime,
-      playbackRate: elements.videoPlayer.playbackRate,
-    });
-  };
+function setupOfficialWatch(watchConfig) {
+  elements.officialWatchLink.href = watchConfig.officialWatchUrl;
+  elements.officialWatchLink.textContent = watchConfig.officialWatchLabel;
+  elements.officialWatchLink.classList.remove("hidden");
+  elements.popoutWatchButton.classList.remove("hidden");
+  elements.emptyPlayer.classList.remove("hidden");
 
-  for (const eventName of ["play", "pause", "seeked", "ratechange"]) {
-    elements.videoPlayer.addEventListener(eventName, broadcast);
-  }
-  window.setInterval(broadcast, 5_000);
-}
-
-async function startBroadcast() {
-  if (!isHost) {
-    showToast("방장만 화면을 공유할 수 있습니다.");
+  if (watchConfig.embedUrl) {
+    elements.playerLoading.classList.remove("hidden");
+    elements.embedPlayer.src = watchConfig.embedUrl;
+    elements.embedPlayer.classList.remove("hidden");
+    elements.emptyPlayer.classList.add("hidden");
+    elements.embedPlayer.addEventListener(
+      "load",
+      () => {
+        elements.playerLoading.classList.add("hidden");
+        setSyncStatus(
+          "공식 페이지를 앱 안에 열었습니다. 재생은 각자 조작하세요.",
+          true,
+        );
+      },
+      { once: true },
+    );
     return;
   }
 
+  setSyncStatus("공식 중계를 새 창으로 열고 여기서 함께 채팅하세요.", true);
+}
+
+async function startLocalCapture() {
   if (!navigator.mediaDevices?.getDisplayMedia) {
-    showToast("이 브라우저는 화면 공유를 지원하지 않습니다.");
+    showToast("이 브라우저는 화면 띄우기를 지원하지 않습니다.");
     return;
   }
 
@@ -385,267 +255,72 @@ async function startBroadcast() {
       audio: true,
     });
 
-    localBroadcastStream = stream;
+    localCaptureStream = stream;
     for (const track of stream.getTracks()) {
       track.addEventListener(
         "ended",
         () => {
-          if (localBroadcastStream === stream) stopBroadcast();
+          if (localCaptureStream === stream) stopLocalCapture();
         },
         { once: true },
       );
     }
 
-    showBroadcastStream(stream, true);
-    socket.emit("broadcast-start", null, (result) => {
-      if (!result?.ok) {
-        stopBroadcast(false);
-        showToast("화면 공유를 시작하지 못했습니다.");
-      }
-    });
+    elements.embedPlayer.classList.add("hidden");
+    elements.emptyPlayer.classList.add("hidden");
+    elements.playerLoading.classList.add("hidden");
+    elements.localCapturePlayer.srcObject = stream;
+    elements.localCapturePlayer.classList.remove("hidden");
+    elements.localCapturePlayer.muted = true;
+    elements.captureButton.textContent = "화면 내리기";
+    elements.captureButton.classList.add("capturing");
+    updateStreamMode();
+    setSyncStatus("내 치지직 화면을 이 방에 띄웠습니다. 채팅은 계속 공유됩니다.", true);
+    await elements.localCapturePlayer.play();
   } catch (error) {
     if (error?.name !== "NotAllowedError") {
-      showToast("화면 공유를 시작하지 못했습니다.");
+      showToast("화면을 띄우지 못했습니다.");
     }
   }
 }
 
-function stopBroadcast(notifyServer = true) {
-  const stream = localBroadcastStream;
-  localBroadcastStream = null;
+function stopLocalCapture() {
+  for (const track of localCaptureStream?.getTracks() ?? []) track.stop();
+  localCaptureStream = null;
+  elements.localCapturePlayer.pause();
+  elements.localCapturePlayer.srcObject = null;
+  elements.localCapturePlayer.classList.add("hidden");
+  elements.captureButton.textContent = "내 화면 띄우기";
+  elements.captureButton.classList.remove("capturing");
 
-  for (const track of stream?.getTracks() ?? []) track.stop();
-  for (const viewerId of hostPeerConnections.keys()) closeHostPeer(viewerId);
-
-  roomBroadcasting = false;
-  elements.broadcastButton.textContent = "화면 공유";
-  elements.broadcastButton.classList.remove("broadcasting");
-  if (notifyServer) socket.emit("broadcast-stop");
-  restoreConfiguredPlayer();
-}
-
-function requestBroadcast() {
-  if (isHost || viewerRequested || remoteBroadcastStream) return;
-  viewerRequested = true;
-  elements.streamModeLabel.textContent = "화면 공유";
-  setSyncStatus("방장 화면 연결 중", false);
-  socket.emit("viewer-ready");
-}
-
-async function createOfferForViewer(viewerId) {
-  closeHostPeer(viewerId);
-  const peer = createPeerConnection(viewerId, false);
-  hostPeerConnections.set(viewerId, peer);
-
-  for (const track of localBroadcastStream.getTracks()) {
-    peer.addTrack(track, localBroadcastStream);
-  }
-
-  const offer = await peer.createOffer();
-  await peer.setLocalDescription(offer);
-  socket.emit("webrtc-offer", {
-    targetId: viewerId,
-    description: peer.localDescription,
-  });
-}
-
-async function acceptBroadcastOffer(hostId, description) {
-  if (!description) return;
-
-  if (remotePeerConnection) remotePeerConnection.close();
-  remotePeerConnection = createPeerConnection(hostId, true);
-  viewerRequested = false;
-
-  await remotePeerConnection.setRemoteDescription(description);
-  await flushPendingIce(hostId, remotePeerConnection);
-  const answer = await remotePeerConnection.createAnswer();
-  await remotePeerConnection.setLocalDescription(answer);
-  socket.emit("webrtc-answer", {
-    targetId: hostId,
-    description: remotePeerConnection.localDescription,
-  });
-}
-
-function createPeerConnection(remoteId, receiveBroadcast) {
-  const peer = new RTCPeerConnection(rtcConfiguration);
-
-  peer.addEventListener("icecandidate", ({ candidate }) => {
-    if (!candidate) return;
-    socket.emit("webrtc-ice-candidate", {
-      targetId: remoteId,
-      candidate,
-    });
-  });
-
-  peer.addEventListener("connectionstatechange", () => {
-    if (peer.connectionState === "connected") {
-      setSyncStatus(
-        receiveBroadcast ? "방장 화면 시청 중" : "화면 송출 중",
-        true,
-      );
-    }
-
-    if (peer.connectionState === "failed") {
-      if (receiveBroadcast && roomBroadcasting) {
-        stopRemoteBroadcast();
-        window.setTimeout(requestBroadcast, 700);
-      } else if (!receiveBroadcast) {
-        closeHostPeer(remoteId);
-      }
-    }
-  });
-
-  if (receiveBroadcast) {
-    peer.addEventListener("track", (event) => {
-      const stream = event.streams[0];
-      if (stream) showBroadcastStream(stream, false);
-    });
-  }
-
-  return peer;
-}
-
-function showBroadcastStream(stream, localPreview) {
-  if (!localPreview) remoteBroadcastStream = stream;
-
-  elements.emptyPlayer.classList.add("hidden");
-  elements.embedPlayer.classList.add("hidden");
-  elements.playerLoading.classList.add("hidden");
-  elements.videoPlayer.classList.remove("hidden");
-  elements.videoPlayer.srcObject = stream;
-  elements.videoPlayer.controls = !localPreview;
-  elements.videoPlayer.muted = true;
-  elements.muteButton.textContent = "소리 켜기";
-  elements.streamModeLabel.textContent = "화면 공유";
-
-  if (localPreview) {
-    elements.broadcastButton.textContent = "공유 중지";
-    elements.broadcastButton.classList.add("broadcasting");
-    setSyncStatus("내 화면 송출 중", true);
-  } else {
-    setSyncStatus("방장 화면 시청 중", true);
-  }
-
-  elements.videoPlayer.play().catch(() => {
-    setSyncStatus("재생 버튼을 눌러 주세요", false);
-  });
-}
-
-function stopRemoteBroadcast() {
-  viewerRequested = false;
-  remoteBroadcastStream = null;
-  pendingIceCandidates.clear();
-  if (remotePeerConnection) remotePeerConnection.close();
-  remotePeerConnection = null;
-  restoreConfiguredPlayer();
-}
-
-function closeHostPeer(viewerId) {
-  const peer = hostPeerConnections.get(viewerId);
-  if (peer) peer.close();
-  hostPeerConnections.delete(viewerId);
-  pendingIceCandidates.delete(viewerId);
-}
-
-async function flushPendingIce(remoteId, peer) {
-  const candidates = pendingIceCandidates.get(remoteId) ?? [];
-  pendingIceCandidates.delete(remoteId);
-  for (const candidate of candidates) {
-    await peer.addIceCandidate(candidate).catch(() => {});
-  }
-}
-
-function restoreConfiguredPlayer() {
-  elements.videoPlayer.srcObject = null;
-  elements.videoPlayer.controls = isHost;
-
-  if (config?.configured && config.type === "embed") {
-    elements.videoPlayer.classList.add("hidden");
+  if (config?.embedUrl) {
     elements.embedPlayer.classList.remove("hidden");
-    elements.streamModeLabel.textContent = "공식 임베드";
-    setSyncStatus("채팅만 동기화됨", true);
-    return;
+  } else {
+    elements.emptyPlayer.classList.remove("hidden");
   }
 
-  if (config?.configured) {
-    elements.videoPlayer.classList.remove("hidden");
-    elements.streamModeLabel.textContent =
-      config.type === "hls" ? "적응형 HLS" : "직접 영상";
-    setSyncStatus("플레이어 준비됨", true);
-    return;
-  }
-
-  elements.videoPlayer.classList.add("hidden");
-  elements.emptyPlayer.classList.remove("hidden");
-  elements.streamModeLabel.textContent = config?.officialWatchUrl
-    ? "공식 사이트"
-    : "설정 필요";
-  setSyncStatus(
-    config?.officialWatchUrl ? "채팅 연결됨" : "중계 소스 미설정",
-    Boolean(config?.officialWatchUrl),
-  );
+  updateStreamMode();
+  setSyncStatus("내 화면을 내렸습니다. 필요하면 다시 띄울 수 있습니다.", true);
 }
 
-async function applyMediaState(mediaState) {
-  if (!config?.syncAvailable || !mediaState) return;
-
-  const video = elements.videoPlayer;
-  const elapsed = mediaState.paused
-    ? 0
-    : Math.max(0, Date.now() - mediaState.updatedAt) / 1000;
-  const targetTime =
-    mediaState.currentTime + elapsed * mediaState.playbackRate;
-  const drift = targetTime - video.currentTime;
-
-  applyingRemoteState = true;
-  try {
-    if (Math.abs(drift) > 2.5 && Number.isFinite(targetTime)) {
-      video.currentTime = targetTime;
-    }
-
-    if (mediaState.paused) {
-      video.pause();
-      video.playbackRate = mediaState.playbackRate;
-    } else {
-      video.playbackRate =
-        Math.abs(drift) > 0.35 && Math.abs(drift) <= 2.5
-          ? mediaState.playbackRate + Math.sign(drift) * 0.05
-          : mediaState.playbackRate;
-      try {
-        await video.play();
-      } catch {
-        showToast("브라우저 재생 버튼을 한 번 눌러 주세요.");
-      }
-    }
-  } finally {
-    window.setTimeout(() => {
-      applyingRemoteState = false;
-      if (!mediaState.paused) video.playbackRate = mediaState.playbackRate;
-    }, 500);
-  }
+function updateStreamMode() {
+  const watchMode = localCaptureStream ? "내 화면 띄움" : "각자 화면 띄우기";
+  elements.streamModeLabel.textContent = `${watchMode} · 준비 ${lastReadyCount}/${lastReadyTotal}`;
 }
 
-function handleFatalHlsError(data) {
-  if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-    setSyncStatus("네트워크 복구 중", false);
-    hls.startLoad();
+function openOfficialWatchPage() {
+  if (!config?.officialWatchUrl) {
+    showToast("공식 시청 링크가 설정되지 않았습니다.");
     return;
   }
 
-  if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-    setSyncStatus("플레이어 복구 중", false);
-    hls.recoverMediaError();
-    return;
-  }
-
-  hls.destroy();
-  elements.playerLoading.classList.add("hidden");
-  setSyncStatus("중계를 재생할 수 없음", false);
-  showToast("공식 중계 주소와 CORS 설정을 확인해 주세요.");
+  window.open(config.officialWatchUrl, "_blank", "noopener,noreferrer");
+  setSyncStatus("공식 중계 창을 열었습니다. 여기서는 채팅을 계속하세요.", true);
 }
 
-function hidePlayerLoading() {
-  elements.playerLoading.classList.add("hidden");
+function updateReadyButton() {
+  elements.readyButton.textContent = isReady ? "준비 취소" : "시청 준비 완료";
+  elements.readyButton.classList.toggle("ready", isReady);
 }
 
 function renderPeople(users) {
@@ -662,6 +337,12 @@ function renderPeople(users) {
       name.textContent = user.id === ownSocketId ? `${user.nickname} (나)` : user.nickname;
 
       item.append(avatar, name);
+      if (user.ready) {
+        const readyBadge = document.createElement("span");
+        readyBadge.className = "ready-badge";
+        readyBadge.textContent = "READY";
+        item.append(readyBadge);
+      }
       if (user.isHost) {
         const badge = document.createElement("span");
         badge.className = "host-badge";

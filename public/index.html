@@ -25,7 +25,7 @@
           <div class="hero-icon">▶</div>
           <h1>같이보기</h1>
           <p class="hero-description">
-            공식 중계를 보면서 친구들과 실시간으로 이야기하세요.
+            치지직 공식 중계를 각자 열어 보고, 같은 방에서 실시간으로 이야기하세요.
           </p>
         </div>
 
@@ -52,7 +52,7 @@
             </div>
           </form>
           <p class="source-note">
-            방장이 공유한 화면은 참여자에게 WebRTC로 직접 전송됩니다.
+            영상은 각자 공식 치지직에서 직접 보고, 이 앱은 방과 채팅만 담당합니다.
           </p>
         </div>
       </section>
@@ -62,11 +62,12 @@
           <section class="stage-panel">
             <div id="playerShell" class="player-shell">
               <video
-                id="videoPlayer"
+                id="localCapturePlayer"
                 class="hidden"
                 playsinline
                 muted
-                preload="auto"
+                autoplay
+                controls
               ></video>
               <iframe
                 id="embedPlayer"
@@ -78,19 +79,25 @@
               ></iframe>
               <div id="emptyPlayer" class="empty-player hidden">
                 <div class="empty-icon">▶</div>
-                <h2>방장이 화면을 공유할 수 있습니다</h2>
+                <h2>내 치지직 화면을 이 방에 띄워 보세요</h2>
                 <p>
-                  공유 권한이 있는 영상이나 화면을 선택하면 이 플레이어에서
-                  함께 볼 수 있습니다.
+                  치지직을 연 뒤 `내 화면 띄우기`를 누르고 치지직 탭이나 창을
+                  선택하세요. 이 화면은 내 브라우저에만 보이고, 채팅은 방 전체와
+                  공유됩니다.
                 </p>
-                <a
-                  id="officialWatchLink"
-                  class="watch-button hidden"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  공식 중계 보러 가기
-                </a>
+                <div class="watch-actions">
+                  <a
+                    id="officialWatchLink"
+                    class="watch-button hidden"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    치지직에서 보기
+                  </a>
+                  <button id="popoutWatchButton" class="watch-button secondary hidden" type="button">
+                    새 창으로 열기
+                  </button>
+                </div>
               </div>
               <div id="playerLoading" class="player-loading hidden">
                 <span class="loader"></span>
@@ -103,10 +110,8 @@
                 <span></span> 방에 연결하는 중
               </div>
               <div class="local-controls">
-                <button id="broadcastButton" class="hidden" type="button">
-                  화면 공유
-                </button>
-                <button id="muteButton" type="button">소리 켜기</button>
+                <button id="captureButton" type="button">내 화면 띄우기</button>
+                <button id="readyButton" type="button">시청 준비 완료</button>
                 <button id="fullscreenButton" type="button">전체 화면</button>
               </div>
             </div>
@@ -133,7 +138,7 @@
                 <strong id="hostLabel">방장 연결 중</strong>
               </div>
               <div>
-                <span>재생 방식</span>
+                <span>시청 방식</span>
                 <strong id="streamModeLabel">확인 중</strong>
               </div>
             </div>
@@ -191,7 +196,6 @@
     <div id="toast" class="toast" role="status"></div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="/vendor/hls.min.js"></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>
